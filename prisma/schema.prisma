@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Song {
+  id                String   @id @default(uuid())
+  genres            String   // Comma-separated or JSON array string
+  targetIterations  Int
+  currentIterations Int      @default(0)
+  status            String   @default("PENDING") // PENDING, PROCESSING, COMPLETED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  likes             Int      @default(0)
+  dislikes          Int      @default(0)
+
+  tracks            Track[]
+  votes             Vote[]
+}
+
+model Track {
+  id           String   @id @default(uuid())
+  songId       String
+  song         Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  notesData    String   // JSON string of sequence
+  duration     Float
+  artistName   String?
+  email        String?
+  orderedIndex Int?     // Assigned after processing
+  createdAt    DateTime @default(now())
+}
+
+model Vote {
+  id        String   @id @default(uuid())
+  songId    String
+  song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  ipAddress String
+  voteType  String   // "LIKE" | "DISLIKE"
+  createdAt DateTime @default(now())
+
+  @@unique([songId, ipAddress])
+}
