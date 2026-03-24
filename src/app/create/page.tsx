@@ -8,7 +8,7 @@ export default function CreateSong() {
   const router = useRouter();
   const [genres, setGenres] = useState('');
   const [iterations, setIterations] = useState('4');
-  const [email, setEmail] = useState('');
+
   const [artistName, setArtistName] = useState('');
   const [title, setTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -28,7 +28,7 @@ export default function CreateSong() {
           title,
           genres,
           targetIterations: parseInt(iterations),
-          email,
+
           artistName,
           notesData,
           duration
@@ -96,16 +96,7 @@ export default function CreateSong() {
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Your Email (Optional, notify when completed)</label>
-          <input 
-            type="email" 
-            className="form-input" 
-            placeholder="mail@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+
       </div>
 
       <Sequencer onSave={handleSave} isSaving={isSaving} />

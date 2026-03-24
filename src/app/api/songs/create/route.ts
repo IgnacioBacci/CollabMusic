@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { genres, targetIterations, notesData, duration, artistName, email, title } = body;
+    const { genres, targetIterations, notesData, duration, artistName, title } = body;
 
     if (!genres || !targetIterations || targetIterations < 2 || targetIterations > 6) {
       return NextResponse.json({ error: 'Invalid config payload' }, { status: 400 });
@@ -26,7 +26,6 @@ export async function POST(request: Request) {
             notesData,
             duration,
             artistName: artistName || 'Anonymous',
-            email: email || null,
           }
         }
       },

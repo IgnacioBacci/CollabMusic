@@ -11,7 +11,7 @@ export default function HelpSong() {
   const [loading, setLoading] = useState(true);
   
   const [artistName, setArtistName] = useState('');
-  const [email, setEmail] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -31,14 +31,14 @@ export default function HelpSong() {
       const res = await fetch(`/api/songs/${selectedSong.id}/iterate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notesData, duration, artistName, email })
+        body: JSON.stringify({ notesData, duration, artistName })
       });
       const data = await res.json();
       
       if (!res.ok) throw new Error(data.error || 'Error saving track');
       
       if (data.status === 'COMPLETED') {
-        alert('🎉 You contributed the final part! The song is now complete. All collaborators will be notified by email.');
+        alert('🎉 You contributed the final part! The song is now complete!');
       } else {
         alert('Track successfully contributed! The song still needs more collaborators.');
       }
@@ -94,10 +94,7 @@ export default function HelpSong() {
               <label className="form-label">Your Name (Optional)</label>
               <input type="text" className="form-input" value={artistName} onChange={e => setArtistName(e.target.value)} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Your Email (Optional, notify when assembled)</label>
-              <input type="email" className="form-input" value={email} onChange={e => setEmail(e.target.value)} />
-            </div>
+
           </div>
 
           <Sequencer onSave={handleSaveTrack} isSaving={isSaving} />
