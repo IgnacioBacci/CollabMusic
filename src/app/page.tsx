@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Player from '@/components/Player';
 
 export default function Home() {
   const [completedSongs, setCompletedSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'newest' | 'likes'>('newest');
+  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSongs();
@@ -106,10 +108,13 @@ export default function Home() {
              <button 
                 className="btn btn-secondary" 
                 style={{ width: '100%' }}
-                onClick={() => alert('Playback engine building in progress...')}
+                onClick={() => setPlayingSongId(playingSongId === song.id ? null : song.id)}
               >
-               Play Masterpiece
+               {playingSongId === song.id ? 'Close Player' : 'Play Masterpiece'}
              </button>
+             {playingSongId === song.id && (
+               <Player tracks={song.tracks} />
+             )}
             </div>
           ))}
         </div>
