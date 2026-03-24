@@ -14,6 +14,10 @@ const INSTRUMENTS = [
   { id: 'tom_l', name: 'Low Tom' },
   { id: 'tom_h', name: 'High Tom' },
   { id: 'crash', name: 'Crash' },
+  // Strings
+  { id: 'guitar', name: 'A. Guitar' },
+  { id: 'guitar_el', name: 'E. Guitar' },
+  { id: 'banjo', name: 'Banjo' },
   // Synths & Bass
   { id: 'bass_sub', name: 'Sub Bass' },
   { id: 'bass_fm', name: 'FM Bass' },
@@ -24,14 +28,14 @@ const INSTRUMENTS = [
   // Keys & Strings
   { id: 'piano', name: 'El. Piano' },
   { id: 'organ', name: 'Organ' },
-  { id: 'strings', name: 'Strings' },
+  { id: 'strings', name: 'Orchestral' },
   // FX & Extras
   { id: 'bell', name: 'Bell' },
   { id: 'fx_sweep', name: 'Sweep FX' },
   { id: 'fx_zap', name: 'Zap FX' }
 ];
 
-const STEPS = 32;
+const MAX_STEPS = 128; // Up to 32 seconds 
 
 interface SequencerProps {
   onSave: (notesData: string, duration: number) => void;
@@ -39,15 +43,15 @@ interface SequencerProps {
 }
 
 export default function Sequencer({ onSave, isSaving }: SequencerProps) {
+  const [steps, setSteps] = useState(32);
   const [grid, setGrid] = useState(() => 
-    INSTRUMENTS.map(() => Array(STEPS).fill(false))
+    INSTRUMENTS.map(() => Array(MAX_STEPS).fill(false))
   );
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const synthsRef = useRef<any>({});
 
   useEffect(() => {
-    // Generate an arsenal of 20 distinct synths
     synthsRef.current = {
       kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 4 }).toDestination(),
       snare: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.2 } }).toDestination(),
@@ -58,6 +62,10 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
       tom_h: new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2 }).toDestination(),
       crash: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 1.5, release: 0.5 } }).toDestination(),
       
+      guitar: new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.98 }).toDestination(),
+      guitar_el: new Tone.FMSynth({ harmonicity: 1, modulationIndex: 10, envelope: { attack: 0.05, decay: 0.3 } }).toDestination(),
+      banjo: new Tone.PluckSynth({ attackNoise: 2, dampening: 5000, resonance: 0.6 }).toDestination(),
+
       bass_sub: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.8, release: 0.5 } }).toDestination(),
       bass_fm: new Tone.FMSynth({ harmonicity: 0.5, modulationIndex: 5, envelope: { attack: 0.01, decay: 0.2 } }).toDestination(),
       synth_pad: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.5, decay: 0.5, sustain: 0.5, release: 1 } }).toDestination(),
@@ -84,8 +92,6 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
 
     let step = 0;
     const interval = '16n';
-    
-    // Scale volumes slightly so 20 instruments don't blow out the speakers
     Tone.Destination.volume.value = -8;
 
     const sid = Tone.Transport.scheduleRepeat((time) => {
@@ -104,6 +110,10 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
             case 'tom_h': s.triggerAttackRelease('G2', '8n', time); break;
             case 'crash': s.triggerAttackRelease('4n', time, 0.6); break;
             
+            case 'guitar': s.triggerAttackRelease('C4', '8n', time); break;
+            case 'guitar_el': s.triggerAttackRelease('E3', '4n', time); break;
+            case 'banjo': s.triggerAttackRelease('G4', '16n', time); break;
+
             case 'bass_sub': s.triggerAttackRelease('C2', '8n', time); break;
             case 'bass_fm': s.triggerAttackRelease('E2', '16n', time); break;
             case 'synth_pad': s.triggerAttackRelease(['C4', 'E4', 'G4'], '4n', time, 0.4); break;
@@ -126,7 +136,7 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
         setCurrentStep(step);
       }, time);
 
-      step = (step + 1) % STEPS;
+      step = (step + 1) % steps; // loop within the chosen length
     }, interval);
 
     Tone.Transport.start();
@@ -136,7 +146,7 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
       Tone.Transport.clear(sid);
       setCurrentStep(0);
     };
-  }, [isPlaying, grid]);
+  }, [isPlaying, grid, steps]);
 
   const toggleCell = (instIndex: number, stepIndex: number) => {
     const newGrid = [...grid];
@@ -153,17 +163,38 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
   const handleSave = () => {
     const activeNotes = [];
     for (let i = 0; i < INSTRUMENTS.length; i++) {
-      for (let s = 0; s < STEPS; s++) {
+        // Only save what's strictly within the active steps limit
+      for (let s = 0; s < steps; s++) {
         if (grid[i][s]) activeNotes.push({ inst: INSTRUMENTS[i].id, step: s });
       }
     }
-    const duration = (STEPS * 60) / 120 / 4;
-    onSave(JSON.stringify(activeNotes), duration);
+    const duration = (steps * 60) / 120 / 4;
+    onSave(JSON.stringify({ notes: activeNotes, steps }), duration);
+  };
+
+  const handleStepsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = parseInt(e.target.value);
+    if (!val || val < 4) val = 4;
+    if (val > MAX_STEPS) val = MAX_STEPS;
+    setSteps(val);
   };
 
   return (
     <div className="card" style={{ marginTop: '2rem' }}>
-      <h3 style={{ marginBottom: '1rem' }}>Sequencer Studio</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3>Sequencer Studio</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.9rem', color: '#aaa' }}>Track Length (Steps):</label>
+            <input 
+                type="number" 
+                value={steps} 
+                onChange={handleStepsChange} 
+                style={{ width: '60px', padding: '0.3rem', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '4px' }}
+                min="4" max="128" step="4"
+            />
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>({((steps * 60) / 120 / 4).toFixed(1)} s)</span>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
         <button className={`btn ${isPlaying ? 'btn-secondary' : ''}`} onClick={handlePlayPause}>
           {isPlaying ? <Square size={18} /> : <Play size={18} />}
@@ -174,11 +205,11 @@ export default function Sequencer({ onSave, isSaving }: SequencerProps) {
         </button>
       </div>
 
-      <div className="sequencer-grid" style={{ gridTemplateColumns: `auto repeat(${STEPS}, 1fr)` }}>
+      <div className="sequencer-grid" style={{ gridTemplateColumns: `auto repeat(${steps}, 1fr)` }}>
         {INSTRUMENTS.map((inst, i) => (
           <React.Fragment key={inst.id}>
             <div className="instrument-label">{inst.name}</div>
-            {grid[i].map((isActive, s) => (
+            {grid[i].slice(0, steps).map((isActive, s) => (
               <div
                 key={s}
                 className={`note-cell ${isActive ? 'active' : ''} ${currentStep === s && isPlaying ? 'playing' : ''}`}

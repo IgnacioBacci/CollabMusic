@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { processSongCompletion } from '@/lib/groq';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -43,11 +42,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Check if it reached the target after update
     if (updatedSong.currentIterations >= updatedSong.targetIterations) {
-      // Trigger Groq Processing asynchronously (non-blocking)
-      // Note: In Vercel serverless, background promises need special handling usually, 
-      // but await locally or with waitUntil is better. For standard Next.js, we can just await it or don't await.
-      // We will await it here to ensure it finishes during the request, max wait might be a few seconds.
-      await processSongCompletion(id);
+      // Fetch all tracks chronologically
+      const allTracks = await prisma.track.findMany({
+        where: { songId: id },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Update their orderedIndex chronologically
+      await prisma.$transaction(
+        allTracks.map((t, index) => 
+          prisma.track.update({
+            where: { id: t.id },
+            data: { orderedIndex: index }
+          })
+        )
+      );
+
+      // Finalize the song
+      await prisma.song.update({
+        where: { id },
+        data: { status: 'COMPLETED' }
+      });
+
       return NextResponse.json({ success: true, status: 'COMPLETED' }, { status: 200 });
     }
 

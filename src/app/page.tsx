@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import Sequencer from '@/components/Sequencer';
 import Player from '@/components/Player';
+import EqualizerBackground from '@/components/EqualizerBackground';
 
 export default function Home() {
   const [completedSongs, setCompletedSongs] = useState([]);
@@ -53,9 +56,11 @@ export default function Home() {
   };
 
   return (
-    <div>
-      <h1 className="title">Welcome to CollabMusic</h1>
-      <p className="subtitle">Collaboratively compose music blindfolded and let AI assemble it.</p>
+    <>
+      <EqualizerBackground />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <h1 className="title">Welcome to CollabMusic</h1>
+        <p className="subtitle">Collaboratively compose music blindfolded and let AI assemble it.</p>
 
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '4rem' }}>
         <Link href="/create" className="btn btn-secondary" style={{ padding: '1rem 3rem', fontSize: '1.2rem' }}>Create Option</Link>
@@ -119,6 +124,7 @@ export default function Home() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

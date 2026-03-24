@@ -14,6 +14,10 @@ const INSTRUMENTS = [
   { id: 'tom_l', name: 'Low Tom' },
   { id: 'tom_h', name: 'High Tom' },
   { id: 'crash', name: 'Crash' },
+  // Strings
+  { id: 'guitar', name: 'A. Guitar' },
+  { id: 'guitar_el', name: 'E. Guitar' },
+  { id: 'banjo', name: 'Banjo' },
   // Synths & Bass
   { id: 'bass_sub', name: 'Sub Bass' },
   { id: 'bass_fm', name: 'FM Bass' },
@@ -24,43 +28,68 @@ const INSTRUMENTS = [
   // Keys & Strings
   { id: 'piano', name: 'El. Piano' },
   { id: 'organ', name: 'Organ' },
-  { id: 'strings', name: 'Strings' },
+  { id: 'strings', name: 'Orchestral' },
   // FX & Extras
   { id: 'bell', name: 'Bell' },
   { id: 'fx_sweep', name: 'Sweep FX' },
   { id: 'fx_zap', name: 'Zap FX' }
 ];
 
-const STEPS_PER_TRACK = 32;
-
 export default function Player({ tracks }: { tracks: any[] }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const synthsRef = useRef<any>({});
   
-  const totalSteps = tracks.length * STEPS_PER_TRACK;
+  // Calculate total steps with 1-second overlaps
+  // 1 second (120 bpm) = 2 beats = 8 sixteenth-notes (8 steps)
+  const OVERLAP_STEPS = 8;
   
-  // Combine all track data into one unified grid sequence
+  const [totalSteps, setTotalSteps] = useState(0);
   const [grid, setGrid] = useState<boolean[][]>([]);
 
   useEffect(() => {
+    let cursor = 0;
+    const trackOffsets: number[] = [];
+    
+    // First pass to determine total length and start points
+    tracks.forEach((track, idx) => {
+        const payload = JSON.parse(track.notesData || '{"notes":[], "steps": 32}');
+        const steps = payload.steps || 32;
+        
+        if (idx === 0) {
+            trackOffsets.push(0);
+            cursor += steps;
+        } else {
+            // Overlap by 1 second (8 steps)
+            const overlap = cursor >= OVERLAP_STEPS ? OVERLAP_STEPS : cursor;
+            cursor -= overlap; 
+            trackOffsets.push(cursor);
+            cursor += steps;
+        }
+    });
+
+    const finalLength = cursor;
+    setTotalSteps(finalLength);
+
     // Reconstruct the master grid
-    const newGrid = INSTRUMENTS.map(() => Array(totalSteps).fill(false));
+    const newGrid = INSTRUMENTS.map(() => Array(finalLength).fill(false));
     
     tracks.forEach((track, trackIdx) => {
       try {
-        const notes = JSON.parse(track.notesData || '[]');
-        const offset = trackIdx * STEPS_PER_TRACK;
+        const payload = JSON.parse(track.notesData || '{"notes":[], "steps": 32}');
+        const notes = payload.notes || [];
+        const offset = trackOffsets[trackIdx];
+        
         notes.forEach((note: any) => {
           const instIdx = INSTRUMENTS.findIndex(i => i.id === note.inst);
-          if (instIdx !== -1 && note.step < STEPS_PER_TRACK) {
+          if (instIdx !== -1 && offset + note.step < finalLength) {
             newGrid[instIdx][offset + note.step] = true;
           }
         });
       } catch(e) {}
     });
     setGrid(newGrid);
-  }, [tracks, totalSteps]);
+  }, [tracks]);
 
   useEffect(() => {
     synthsRef.current = {
@@ -73,6 +102,10 @@ export default function Player({ tracks }: { tracks: any[] }) {
       tom_h: new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2 }).toDestination(),
       crash: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 1.5, release: 0.5 } }).toDestination(),
       
+      guitar: new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.98 }).toDestination(),
+      guitar_el: new Tone.FMSynth({ harmonicity: 1, modulationIndex: 10, envelope: { attack: 0.05, decay: 0.3 } }).toDestination(),
+      banjo: new Tone.PluckSynth({ attackNoise: 2, dampening: 5000, resonance: 0.6 }).toDestination(),
+
       bass_sub: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.8, release: 0.5 } }).toDestination(),
       bass_fm: new Tone.FMSynth({ harmonicity: 0.5, modulationIndex: 5, envelope: { attack: 0.01, decay: 0.2 } }).toDestination(),
       synth_pad: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.5, decay: 0.5, sustain: 0.5, release: 1 } }).toDestination(),
@@ -95,7 +128,7 @@ export default function Player({ tracks }: { tracks: any[] }) {
   }, []);
 
   useEffect(() => {
-    if (!isPlaying || grid.length === 0) return;
+    if (!isPlaying || grid.length === 0 || totalSteps === 0) return;
 
     let step = 0;
     const interval = '16n';
@@ -117,6 +150,10 @@ export default function Player({ tracks }: { tracks: any[] }) {
             case 'tom_h': s.triggerAttackRelease('G2', '8n', time); break;
             case 'crash': s.triggerAttackRelease('4n', time, 0.6); break;
             
+            case 'guitar': s.triggerAttackRelease('C4', '8n', time); break;
+            case 'guitar_el': s.triggerAttackRelease('E3', '4n', time); break;
+            case 'banjo': s.triggerAttackRelease('G4', '16n', time); break;
+
             case 'bass_sub': s.triggerAttackRelease('C2', '8n', time); break;
             case 'bass_fm': s.triggerAttackRelease('E2', '16n', time); break;
             case 'synth_pad': s.triggerAttackRelease(['C4', 'E4', 'G4'], '4n', time, 0.4); break;
@@ -140,6 +177,9 @@ export default function Player({ tracks }: { tracks: any[] }) {
       }, time);
 
       step = (step + 1) % totalSteps;
+      if (step === 0) {
+        setIsPlaying(false);
+      }
     }, interval);
 
     Tone.Transport.start();
@@ -166,7 +206,7 @@ export default function Player({ tracks }: { tracks: any[] }) {
         </p>
         <button className={`btn-secondary`} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', background: 'var(--accent-color)', color: '#fff', border: 'none' }} onClick={handlePlayPause}>
           {isPlaying ? <Square size={16} /> : <Play size={16} />}
-          {isPlaying ? 'Parar' : 'Reproducir'}
+          {isPlaying ? 'Stop' : 'Play'}
         </button>
       </div>
 
@@ -174,7 +214,7 @@ export default function Player({ tracks }: { tracks: any[] }) {
         <div style={{ 
           height: '100%', 
           width: `${(currentStep / (totalSteps - 1 || 1)) * 100}%`, 
-          background: 'linear-gradient(90deg, #a445ff, #00d2ff)',
+          background: 'linear-gradient(90deg, var(--accent-color), var(--accent-gradient-2))',
           transition: 'width 0.1s linear'
         }} />
       </div>
