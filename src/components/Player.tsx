@@ -3,220 +3,130 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { Play, Square } from 'lucide-react';
+import { INSTRUMENTS, NOTES_BY_INST, NOTE_DURATION, buildSynths } from './Sequencer';
 
-const INSTRUMENTS = [
-  // Drums & Percussion
-  { id: 'kick', name: 'Kick' },
-  { id: 'snare', name: 'Snare' },
-  { id: 'hihat_c', name: 'HiHat (C)' },
-  { id: 'hihat_o', name: 'HiHat (O)' },
-  { id: 'clap', name: 'Clap' },
-  { id: 'tom_l', name: 'Low Tom' },
-  { id: 'tom_h', name: 'High Tom' },
-  { id: 'crash', name: 'Crash' },
-  // Strings
-  { id: 'guitar', name: 'A. Guitar' },
-  { id: 'guitar_el', name: 'E. Guitar' },
-  { id: 'banjo', name: 'Banjo' },
-  // Synths & Bass
-  { id: 'bass_sub', name: 'Sub Bass' },
-  { id: 'bass_fm', name: 'FM Bass' },
-  { id: 'synth_pad', name: 'Synth Pad' },
-  { id: 'synth_lead', name: 'Lead Synth' },
-  { id: 'pluck', name: 'Pluck' },
-  { id: 'arpeggio', name: 'Arp Synth' },
-  // Keys & Strings
-  { id: 'piano', name: 'El. Piano' },
-  { id: 'organ', name: 'Organ' },
-  { id: 'strings', name: 'Orchestral' },
-  // FX & Extras
-  { id: 'bell', name: 'Bell' },
-  { id: 'fx_sweep', name: 'Sweep FX' },
-  { id: 'fx_zap', name: 'Zap FX' }
-];
+const OVERLAP_STEPS = 8; // 1s at 120 bpm
 
 export default function Player({ tracks }: { tracks: any[] }) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const synthsRef = useRef<any>({});
-  
-  // Calculate total steps with 1-second overlaps
-  // 1 second (120 bpm) = 2 beats = 8 sixteenth-notes (8 steps)
-  const OVERLAP_STEPS = 8;
-  
+  const [currentStep, setCurrentStep] = useState(-1);
   const [totalSteps, setTotalSteps] = useState(0);
   const [grid, setGrid] = useState<boolean[][]>([]);
+  const synthsRef = useRef<any>(null);
+
+  useEffect(() => {
+    synthsRef.current = buildSynths();
+    return () => {
+      if (synthsRef.current) {
+        Object.values(synthsRef.current).forEach((s: any) => { try { s.dispose(); } catch {} });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let cursor = 0;
-    const trackOffsets: number[] = [];
-    
-    // First pass to determine total length and start points
+    const offsets: number[] = [];
+
     tracks.forEach((track, idx) => {
-        const payload = JSON.parse(track.notesData || '{"notes":[], "steps": 32}');
-        const steps = payload.steps || 32;
-        
-        if (idx === 0) {
-            trackOffsets.push(0);
-            cursor += steps;
-        } else {
-            // Overlap by 1 second (8 steps)
-            const overlap = cursor >= OVERLAP_STEPS ? OVERLAP_STEPS : cursor;
-            cursor -= overlap; 
-            trackOffsets.push(cursor);
-            cursor += steps;
-        }
+      let payload: any = {};
+      try { payload = JSON.parse(track.notesData || '{}'); } catch {}
+      const stepsCount: number = payload.steps || 32;
+
+      if (idx === 0) {
+        offsets.push(0);
+        cursor = stepsCount;
+      } else {
+        const overlap = Math.min(OVERLAP_STEPS, cursor);
+        cursor -= overlap;
+        offsets.push(cursor);
+        cursor += stepsCount;
+      }
     });
 
     const finalLength = cursor;
     setTotalSteps(finalLength);
 
-    // Reconstruct the master grid
     const newGrid = INSTRUMENTS.map(() => Array(finalLength).fill(false));
-    
     tracks.forEach((track, trackIdx) => {
       try {
-        const payload = JSON.parse(track.notesData || '{"notes":[], "steps": 32}');
-        const notes = payload.notes || [];
-        const offset = trackOffsets[trackIdx];
-        
+        const payload = JSON.parse(track.notesData || '{}');
+        const notes: any[] = payload.notes || [];
+        const offset = offsets[trackIdx];
         notes.forEach((note: any) => {
           const instIdx = INSTRUMENTS.findIndex(i => i.id === note.inst);
-          if (instIdx !== -1 && offset + note.step < finalLength) {
-            newGrid[instIdx][offset + note.step] = true;
+          if (instIdx !== -1) {
+            const pos = offset + note.step;
+            if (pos < finalLength) newGrid[instIdx][pos] = true;
           }
         });
-      } catch(e) {}
+      } catch {}
     });
     setGrid(newGrid);
   }, [tracks]);
 
   useEffect(() => {
-    synthsRef.current = {
-      kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 4 }).toDestination(),
-      snare: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.2 } }).toDestination(),
-      hihat_c: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.05, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).toDestination(),
-      hihat_o: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.4, release: 0.1 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).toDestination(),
-      clap: new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.01, decay: 0.3 } }).toDestination(),
-      tom_l: new Tone.MembraneSynth({ pitchDecay: 0.2, octaves: 2 }).toDestination(),
-      tom_h: new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2 }).toDestination(),
-      crash: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 1.5, release: 0.5 } }).toDestination(),
-      
-      guitar: new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.98 }).toDestination(),
-      guitar_el: new Tone.FMSynth({ harmonicity: 1, modulationIndex: 10, envelope: { attack: 0.05, decay: 0.3 } }).toDestination(),
-      banjo: new Tone.PluckSynth({ attackNoise: 2, dampening: 5000, resonance: 0.6 }).toDestination(),
-
-      bass_sub: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.8, release: 0.5 } }).toDestination(),
-      bass_fm: new Tone.FMSynth({ harmonicity: 0.5, modulationIndex: 5, envelope: { attack: 0.01, decay: 0.2 } }).toDestination(),
-      synth_pad: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.5, decay: 0.5, sustain: 0.5, release: 1 } }).toDestination(),
-      synth_lead: new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.05, decay: 0.1, sustain: 0.3 } }).toDestination(),
-      pluck: new Tone.PluckSynth().toDestination(),
-      arpeggio: new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.3 } }).toDestination(),
-      
-      piano: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'triangle8' }, envelope: { attack: 0.02, decay: 1, sustain: 0.2, release: 1.5 } }).toDestination(),
-      organ: new Tone.FMSynth({ harmonicity: 2, modulationIndex: 2 }).toDestination(),
-      strings: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.8, decay: 0.5, sustain: 1, release: 1.2 } }).toDestination(),
-      
-      bell: new Tone.MetalSynth({ harmonicity: 12, resonance: 8000, modulationIndex: 20, envelope: { decay: 0.8 } }).toDestination(),
-      fx_sweep: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 1, decay: 1, sustain: 0, release: 0.5 } }).toDestination(),
-      fx_zap: new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).toDestination()
-    };
-
-    return () => {
-      Object.values(synthsRef.current).forEach((s: any) => s.dispose());
-    };
-  }, []);
-
-  useEffect(() => {
     if (!isPlaying || grid.length === 0 || totalSteps === 0) return;
 
     let step = 0;
-    const interval = '16n';
-    Tone.Destination.volume.value = -8;
+    Tone.Transport.bpm.value = 120;
 
     const sid = Tone.Transport.scheduleRepeat((time) => {
       INSTRUMENTS.forEach((inst, index) => {
-        if (grid[index][step]) {
-          const s = synthsRef.current[inst.id];
+        if (grid[index]?.[step]) {
+          const s = synthsRef.current?.[inst.id];
           if (!s) return;
-          
-          switch(inst.id) {
-            case 'kick': s.triggerAttackRelease('C1', '8n', time); break;
-            case 'snare': s.triggerAttackRelease('16n', time); break;
-            case 'hihat_c': s.triggerAttackRelease('32n', time, 0.5); break;
-            case 'hihat_o': s.triggerAttackRelease('8n', time, 0.5); break;
-            case 'clap': s.triggerAttackRelease('16n', time, 0.8); break;
-            case 'tom_l': s.triggerAttackRelease('G1', '8n', time); break;
-            case 'tom_h': s.triggerAttackRelease('G2', '8n', time); break;
-            case 'crash': s.triggerAttackRelease('4n', time, 0.6); break;
-            
-            case 'guitar': s.triggerAttackRelease('C4', '8n', time); break;
-            case 'guitar_el': s.triggerAttackRelease('E3', '4n', time); break;
-            case 'banjo': s.triggerAttackRelease('G4', '16n', time); break;
-
-            case 'bass_sub': s.triggerAttackRelease('C2', '8n', time); break;
-            case 'bass_fm': s.triggerAttackRelease('E2', '16n', time); break;
-            case 'synth_pad': s.triggerAttackRelease(['C4', 'E4', 'G4'], '4n', time, 0.4); break;
-            case 'synth_lead': s.triggerAttackRelease('C5', '16n', time); break;
-            case 'pluck': s.triggerAttackRelease('C4', '16n', time); break;
-            case 'arpeggio': s.triggerAttackRelease(step % 2 === 0 ? 'C4' : 'G4', '16n', time); break;
-            
-            case 'piano': s.triggerAttackRelease(['C3', 'E3', 'G3'], '8n', time); break;
-            case 'organ': s.triggerAttackRelease('C4', '8n', time); break;
-            case 'strings': s.triggerAttackRelease(['C4', 'E4', 'A4'], '2n', time, 0.3); break;
-            
-            case 'bell': s.triggerAttackRelease('32n', time); break;
-            case 'fx_sweep': s.triggerAttackRelease('2n', time, 0.3); break;
-            case 'fx_zap': s.triggerAttackRelease('C6', '32n', time); break;
-          }
+          const note = NOTES_BY_INST[inst.id];
+          const dur = NOTE_DURATION[inst.id] ?? '16n';
+          try {
+            if (typeof note === 'string') {
+              if (['snare','clap','fx_sweep'].includes(inst.id)) {
+                (s as Tone.NoiseSynth).triggerAttackRelease(note as any, time);
+              } else if (['hihat_c','hihat_o','crash','bell','cowbell','vibraphone'].includes(inst.id)) {
+                (s as Tone.MetalSynth).triggerAttackRelease(note as any, time);
+              } else {
+                (s as Tone.Synth).triggerAttackRelease(note as any, dur, time);
+              }
+            } else {
+              (s as Tone.PolySynth).triggerAttackRelease(note, dur, time);
+            }
+          } catch {}
         }
       });
-      
-      Tone.Draw.schedule(() => {
-        setCurrentStep(step);
-      }, time);
 
-      step = (step + 1) % totalSteps;
-      if (step === 0) {
-        setIsPlaying(false);
+      Tone.Draw.schedule(() => setCurrentStep(step), time);
+      step++;
+      if (step >= totalSteps) {
+        Tone.Draw.schedule(() => setIsPlaying(false), time);
       }
-    }, interval);
+    }, '16n');
 
     Tone.Transport.start();
-
     return () => {
       Tone.Transport.stop();
       Tone.Transport.clear(sid);
-      setCurrentStep(0);
+      setCurrentStep(-1);
     };
   }, [isPlaying, grid, totalSteps]);
 
   const handlePlayPause = async () => {
-    if (!isPlaying) {
-      await Tone.start();
-    }
-    setIsPlaying(!isPlaying);
+    await Tone.start();
+    setIsPlaying(p => !p);
   };
+
+  const pct = totalSteps > 1 ? (currentStep / (totalSteps - 1)) * 100 : 0;
 
   return (
     <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', border: '1px solid var(--accent-color)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={{ margin: 0, color: '#00d2ff', fontSize: '0.9rem' }}>
-          Playback Engine ({totalSteps} steps)
+        <p style={{ margin: 0, color: 'var(--accent-gradient-2)', fontSize: '0.85rem' }}>
+          {tracks.length} parts · {totalSteps} steps (with 1s overlaps)
         </p>
-        <button className={`btn-secondary`} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', background: 'var(--accent-color)', color: '#fff', border: 'none' }} onClick={handlePlayPause}>
-          {isPlaying ? <Square size={16} /> : <Play size={16} />}
-          {isPlaying ? 'Stop' : 'Play'}
+        <button onClick={handlePlayPause} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', background: 'var(--accent-color)', color: '#fff', border: 'none', fontSize: '0.9rem' }}>
+          {isPlaying ? <><Square size={14}/> Stop</> : <><Play size={14}/> Play</>}
         </button>
       </div>
-
-      <div style={{ marginTop: '1rem', height: '10px', background: 'rgba(255,255,255,0.1)', borderRadius: '5px', overflow: 'hidden' }}>
-        <div style={{ 
-          height: '100%', 
-          width: `${(currentStep / (totalSteps - 1 || 1)) * 100}%`, 
-          background: 'linear-gradient(90deg, var(--accent-color), var(--accent-gradient-2))',
-          transition: 'width 0.1s linear'
-        }} />
+      <div style={{ marginTop: '0.75rem', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, var(--accent-color), var(--accent-gradient-2))', transition: 'width 0.1s linear' }} />
       </div>
     </div>
   );

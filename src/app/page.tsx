@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import Sequencer from '@/components/Sequencer';
 import Player from '@/components/Player';
 import EqualizerBackground from '@/components/EqualizerBackground';
 
@@ -60,7 +58,7 @@ export default function Home() {
       <EqualizerBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <h1 className="title">Welcome to CollabMusic</h1>
-        <p className="subtitle">Collaboratively compose music blindfolded and let AI assemble it.</p>
+        <p className="subtitle">Create music together. Contribute a part, hear the masterpiece once complete.</p>
 
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '4rem' }}>
         <Link href="/create" className="btn btn-secondary" style={{ padding: '1rem 3rem', fontSize: '1.2rem' }}>Create Option</Link>
@@ -96,7 +94,10 @@ export default function Home() {
           {completedSongs.map((song: any) => (
             <div key={song.id} className="card">
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-               <h3 style={{ marginBottom: '0.5rem', textTransform: 'capitalize' }}>{song.genres}</h3>
+               <div>
+                 <h3 style={{ marginBottom: '0.2rem' }}>{song.title || 'Untitled'}</h3>
+                 <p style={{ color: '#aaa', fontSize: '0.85rem', margin: 0, textTransform: 'capitalize' }}>{song.genres}</p>
+               </div>
                <div style={{ display: 'flex', gap: '0.5rem' }}>
                  <button onClick={() => handleVote(song.id, 'LIKE')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'white', borderRadius: '4px', cursor: 'pointer', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
                    👍 {song.likes}
@@ -107,9 +108,12 @@ export default function Home() {
                </div>
              </div>
              
-             <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '1rem' }}>
-               {song.tracks.length} collaborated parts • {new Date(song.updatedAt).toLocaleDateString()}
-             </p>
+             {song.tracks?.length > 0 && (
+               <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.4rem', marginBottom: '1rem' }}>
+                 🎤 {song.tracks.map((t: any) => t.artistName || 'Anonymous').join(' · ')}
+               </p>
+             )}
+             
              <button 
                 className="btn btn-secondary" 
                 style={{ width: '100%' }}

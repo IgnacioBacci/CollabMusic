@@ -38,7 +38,7 @@ export default function HelpSong() {
       if (!res.ok) throw new Error(data.error || 'Error saving track');
       
       if (data.status === 'COMPLETED') {
-        alert('Incredible! You contributed the final part of this song. The AI is now assembling it.');
+        alert('🎉 You contributed the final part! The song is now complete. All collaborators will be notified by email.');
       } else {
         alert('Track successfully contributed! The song still needs more collaborators.');
       }

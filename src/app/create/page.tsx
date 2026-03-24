@@ -10,6 +10,7 @@ export default function CreateSong() {
   const [iterations, setIterations] = useState('4');
   const [email, setEmail] = useState('');
   const [artistName, setArtistName] = useState('');
+  const [title, setTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (notesData: string, duration: number) => {
@@ -24,6 +25,7 @@ export default function CreateSong() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          title,
           genres,
           targetIterations: parseInt(iterations),
           email,
@@ -47,9 +49,19 @@ export default function CreateSong() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <h1 className="title" style={{ fontSize: '2.5rem', textAlign: 'left' }}>Create a Song</h1>
-      <p style={{ color: '#aaa', marginBottom: '2rem' }}>Define the essential details and contribute the first music track (max 40s) using the sequencer.</p>
+      <p style={{ color: '#aaa', marginBottom: '2rem' }}>Define the details of your song and contribute the opening track (max 40s) using the sequencer.</p>
 
       <div className="card">
+        <div className="form-group">
+          <label className="form-label">Song Title</label>
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder="Give your song a name..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
         <div className="form-group">
           <label className="form-label">Genre(s)</label>
           <input 
